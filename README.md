@@ -13,7 +13,7 @@ The built container includes the model which was dowloaded during built time.
 Run the [export.sh](https://github.com/zax0s/AutoPET2_LION/blob/main/export.sh) script to save the docker image to a .tar.gz file. 
 
 ## Prediction :computer: 
-A wraper class was built to handle the data I/O in the container, within the [process.py](https://github.com/zax0s/AutoPET2_LION/blob/main/process.py)
+A wraper class was built to handle the data I/O in the container, within the [process.py](https://github.com/zax0s/AutoPET2_LION/blob/main/process.py).
 Moose prediction is handled within the wraper and then the output is set to the challenge required directory. 
 
 ## Testing :computer: 
