@@ -12,8 +12,6 @@ RUN mkdir -p /opt/app /workdir_input /workdir_output /opt/app/empty \
 RUN mkdir -p /usr/local/models/nnunet_trained_models \
     && chown user:user /usr/local/models/nnunet_trained_models    
 
-
-
 USER user
 WORKDIR /opt/app
 
@@ -25,8 +23,8 @@ COPY --chown=user:user requirements.txt /opt/app/
 RUN python -m pip install torch torchvision torchaudio
 RUN python -m pip install --user -rrequirements.txt
 
-ADD LION /opt/app/
-RUN python -m pip install -e LION
+ADD LION /opt/app/LION
+RUN python -m pip install --user -e /opt/app/LION
 
 COPY --chown=user:user model_download.py /opt/app/
 RUN python model_download.py
