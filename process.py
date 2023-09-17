@@ -1,4 +1,4 @@
-from moosez import moose
+from lionz import lion
 import contextlib
 
 import os
@@ -6,16 +6,17 @@ import torch
 import SimpleITK
 import glob
 
-MOOSE_MODEL = "clin_pt_fdg_tumor"
-ACCELERATOR = 'cuda'
+TRACER_MODEL = "fdg"
+ACCELERATOR = "cuda"
 
 class Lion():
     def __init__(self):
 
-        self.input_path = '/input/images/pet/'  # according to the specified grand-challenge interfaces
+        self.input_path_pet = '/input/images/pet/'  # according to the specified grand-challenge interfaces
+        self.input_path_ct = '/input/images/ct/'  # according to the specified grand-challenge interfaces
         self.output_path = '/output/images/automated-petct-lesion-segmentation/'  # according to the specified grand-challenge interfaces
-        self.moose_work_dir_input = '/workdir_input/'
-        self.moose_work_dir_output = '/workdir_output/'
+        self.lion_work_dir_input = '/workdir_input/'
+        self.lion_work_dir_output = '/workdir_output/'
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         os.environ['OMP_NUM_THREADS']="1"
         os.environ['nnUNet_n_proc_DA']="0"
@@ -38,13 +39,15 @@ class Lion():
         SimpleITK.WriteImage(img, nii_out_path, True)
 
     def load_inputs(self):
-        pet_mha = glob.glob(os.path.join(self.input_path)+"*.mha")[0]
-        self.convert_mha_nii(pet_mha, os.path.join(self.moose_work_dir_input, 'PET_input.nii.gz'))
+        pet_mha = glob.glob(os.path.join(self.input_path_pet)+"*.mha")[0]
+        self.convert_mha_nii(pet_mha, os.path.join(self.lion_work_dir_input, 'PT_input.nii.gz'))
+        ct_mha = glob.glob(os.path.join(self.input_path_ct)+"*.mha")[0]
+        self.convert_mha_nii(ct_mha, os.path.join(self.lion_work_dir_input, 'CT_input.nii.gz'))
         
     def set_output(self):
         pet_mha = os.path.basename(glob.glob(os.path.join(self.input_path)+"*.mha")[0])
         print("pet_mha: ", pet_mha)
-        prediction_nii = glob.glob(os.path.join(self.moose_work_dir_output)+"*.nii.gz")[0]
+        prediction_nii = glob.glob(os.path.join(self.lion_work_dir_output)+"*.nii.gz")[0]
         print("prediction_nii: ", prediction_nii)
         print("Setting output to file: ", os.path.join(self.output_path, pet_mha))
         self.convert_mha_nii(prediction_nii, os.path.join(self.output_path, pet_mha))
@@ -52,17 +55,17 @@ class Lion():
     def predict(self):
         with open(os.devnull, 'w') as devnull:
             with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-                moose(MOOSE_MODEL, self.moose_work_dir_input, self.moose_work_dir_output,ACCELERATOR)
+                lion(TRACER_MODEL, self.lion_work_dir_input, self.lion_work_dir_output,ACCELERATOR)
 
     def clean_workdir(self):
-        for f in os.listdir(self.moose_work_dir_input):
-            os.remove(os.path.join(self.moose_work_dir_input, f))
-        for f in os.listdir(self.moose_work_dir_output):
-            os.remove(os.path.join(self.moose_work_dir_output, f))
+        for f in os.listdir(self.lion_work_dir_input):
+            os.remove(os.path.join(self.lion_work_dir_input, f))
+        for f in os.listdir(self.lion_work_dir_output):
+            os.remove(os.path.join(self.lion_work_dir_output, f))
 
     def process(self):
         self.check_gpu()
-        print('Copy inputs to moose workdir')
+        print('Copy inputs to lion workdir')
         self.load_inputs()
         print('Start prediction')
         self.predict()
