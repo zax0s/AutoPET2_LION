@@ -23,8 +23,8 @@ COPY --chown=user:user requirements.txt /opt/app/
 RUN python -m pip install torch torchvision torchaudio
 RUN python -m pip install --user -rrequirements.txt
 
-COPY --chown=user:user LION /opt/app/LION
-RUN python -m pip install --user /opt/app/LION
+# COPY --chown=user:user LION /opt/app/LION
+# RUN python -m pip install --user /opt/app/LION
 
 COPY --chown=user:user model_download.py /opt/app/
 RUN python model_download.py

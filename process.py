@@ -5,6 +5,16 @@ import os
 import torch
 import SimpleITK
 import glob
+import shutil
+
+def remove(path):
+    """ param <path> could either be relative or absolute. """
+    if os.path.isfile(path) or os.path.islink(path):
+        os.remove(path)  # remove the file
+    elif os.path.isdir(path):
+        shutil.rmtree(path)  # remove dir and all contains
+    else:
+        raise ValueError("file {} is not a file or dir.".format(path))
 
 TRACER_MODEL = "fdg"
 ACCELERATOR = "cuda"
@@ -20,6 +30,7 @@ class Lion():
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         os.environ['OMP_NUM_THREADS']="1"
         os.environ['nnUNet_n_proc_DA']="0"
+        os.environ['nnUNet_compile'] = 'F'
 
     def check_gpu(self):
         """
@@ -45,7 +56,7 @@ class Lion():
         self.convert_mha_nii(ct_mha, os.path.join(self.lion_work_dir_input, 'CT_input.nii.gz'))
         
     def set_output(self):
-        pet_mha = os.path.basename(glob.glob(os.path.join(self.input_path)+"*.mha")[0])
+        pet_mha = os.path.basename(glob.glob(os.path.join(self.input_path_pet)+"*.mha")[0])
         print("pet_mha: ", pet_mha)
         prediction_nii = glob.glob(os.path.join(self.lion_work_dir_output)+"*.nii.gz")[0]
         print("prediction_nii: ", prediction_nii)
@@ -59,9 +70,9 @@ class Lion():
 
     def clean_workdir(self):
         for f in os.listdir(self.lion_work_dir_input):
-            os.remove(os.path.join(self.lion_work_dir_input, f))
+            remove(os.path.join(self.lion_work_dir_input, f))
         for f in os.listdir(self.lion_work_dir_output):
-            os.remove(os.path.join(self.lion_work_dir_output, f))
+            remove(os.path.join(self.lion_work_dir_output, f))
 
     def process(self):
         self.check_gpu()

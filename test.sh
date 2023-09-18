@@ -21,6 +21,7 @@ docker run --rm \
         --pids-limit="256" \
         --cpus=4 \
         --gpus=all \
+        --ipc=host \
         -v $SCRIPTPATH/test/input/:/input/ \
         -v lion-output-$VOLUME_SUFFIX:/output/ \
         lion
