@@ -23,6 +23,7 @@ COPY --chown=user:user requirements.txt /opt/app/
 RUN python -m pip install torch torchvision torchaudio
 RUN python -m pip install --user -rrequirements.txt
 
+COPY --chown=user:user LION_custom_trainers.py /home/user/.local/lib/python3.10/site-packages/nnunetv2/training/nnUNetTrainer/variants/LION_custom_trainers.py
 # COPY --chown=user:user LION /opt/app/LION
 # RUN python -m pip install --user /opt/app/LION
 
@@ -33,3 +34,4 @@ RUN python -m pip install --upgrade batchgenerators
 COPY --chown=user:user process.py /opt/app/
 
 ENTRYPOINT [ "python", "-m", "process" ]
+#ENTRYPOINT ["/bin/bash"]
