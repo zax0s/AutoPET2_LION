@@ -16,25 +16,28 @@ USER user
 WORKDIR /opt/app
 
 ENV PATH="/home/user/.local/bin:${PATH}"
+ENV nnUNet_results='/usr/local/models/nnunet_trained_models/'
 
 RUN python -m pip install --user -U pip && python -m pip install --user pip-tools
 
 COPY --chown=user:user requirements.txt /opt/app/
 RUN python -m pip install torch torchvision torchaudio
-RUN python -m pip install --user -rrequirements.txt
+RUN python -m pip install -r /opt/app/requirements.txt
 
-RUN pip install git+https://github.com/LalithShiyam/LION.git
 COPY --chown=user:user LION_custom_trainers.py /home/user/.local/lib/python3.10/site-packages/nnunetv2/training/nnUNetTrainer/variants/LION_custom_trainers.py
-
 # COPY --chown=user:user LION /opt/app/LION
 # RUN python -m pip install --user /opt/app/LION
 
 COPY --chown=user:user model_download.py /opt/app/
+RUN pip install git+https://github.com/LalithShiyam/LION.git
+RUN pip install --upgrade git+https://github.com/MIC-DKFZ/nnUNet.git
+
 RUN python model_download.py
 RUN python -m pip install --upgrade batchgenerators
 
-COPY --chown=user:user process.py /opt/app/
 
-ENV MKL_SERVICE_FORCE_INTEL=1
+COPY --chown=user:user process.py /opt/app/
+COPY --chown=user:user LION_custom_trainers.py /opt/app/
+
 ENTRYPOINT [ "python", "-m", "process" ]
 #ENTRYPOINT ["/bin/bash"]

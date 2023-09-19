@@ -19,7 +19,7 @@ docker run --rm \
         --security-opt="no-new-privileges" \
         --shm-size="128m" \
         --pids-limit="256" \
-        --cpus=4 \
+        --cpus=8 \
         --gpus=all \
         -v $SCRIPTPATH/test/input/:/input/ \
         -v lion-output-$VOLUME_SUFFIX:/output/ \
@@ -32,8 +32,10 @@ docker run --rm \
         biocontainers/simpleitk:v1.0.1-3-deb-py3_cv1 python3 -c """
         
 import SimpleITK as sitk
+import shutil
 
 output = sitk.ReadImage('/output/images/automated-petct-lesion-segmentation/random_filename.mha')
+shutil.copyfile('/output/images/automated-petct-lesion-segmentation/random_filename.mha', '/expected_output/actual_output.mha')
 expected_output = sitk.ReadImage('/expected_output/images/automated-petct-lesion-segmentation/random_filename.mha')
 
 label_filter = sitk.LabelOverlapMeasuresImageFilter()
