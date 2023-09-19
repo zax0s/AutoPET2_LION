@@ -34,8 +34,8 @@ docker run --rm \
 import SimpleITK as sitk
 import shutil
 
+shutil.copyfile('/output/images/automated-petct-lesion-segmentation/178.mha', '/expected_output/actual_output.mha')
 output = sitk.ReadImage('/output/images/automated-petct-lesion-segmentation/random_filename.mha')
-shutil.copyfile('/output/images/automated-petct-lesion-segmentation/random_filename.mha', '/expected_output/actual_output.mha')
 expected_output = sitk.ReadImage('/expected_output/images/automated-petct-lesion-segmentation/random_filename.mha')
 
 label_filter = sitk.LabelOverlapMeasuresImageFilter()

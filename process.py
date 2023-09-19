@@ -1,94 +1,109 @@
-from lionz import lion
-import contextlib
-
 import os
-import torch
-import SimpleITK
-import glob
 import shutil
+from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
+from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
+from batchgenerators.utilities.file_and_folder_operations import maybe_mkdir_p, subfiles, join
+from lionz import file_utilities, resources
+import SimpleITK as sitk
 
-def remove(path):
-    """ param <path> could either be relative or absolute. """
-    if os.path.isfile(path) or os.path.islink(path):
-        os.remove(path)  # remove the file
-    elif os.path.isdir(path):
-        shutil.rmtree(path)  # remove dir and all contains
-    else:
-        raise ValueError("file {} is not a file or dir.".format(path))
-
-TRACER_MODEL = "fdg"
-ACCELERATOR = "cuda"
-
-class Lion():
+class LionAutopetSubmission:
     def __init__(self):
+        """Initialize necessary paths."""
+        self._setup_paths()
 
-        self.input_path_pet = '/input/images/pet/'  # according to the specified grand-challenge interfaces
-        self.input_path_ct = '/input/images/ct/'  # according to the specified grand-challenge interfaces
-        self.output_path = '/output/images/automated-petct-lesion-segmentation/'  # according to the specified grand-challenge interfaces
-        self.lion_work_dir_input = '/workdir_input/'
-        self.lion_work_dir_output = '/workdir_output/'
-        os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
-        os.environ['OMP_NUM_THREADS']="1"
-        os.environ['nnUNet_n_proc_DA']="0"
-        os.environ['nnUNet_compile'] = 'F'
-
-    def check_gpu(self):
-        """
-        Check if GPU is available
-        """
-        print('Checking GPU availability')
-        is_available = torch.cuda.is_available()
-        print('Available: ' + str(is_available))
-        print(f'Device count: {torch.cuda.device_count()}')
-        if is_available:
-            print(f'Current device: {torch.cuda.current_device()}')
-            print('Device name: ' + torch.cuda.get_device_name(0))
-            print('Device memory: ' + str(torch.cuda.get_device_properties(0).total_memory))
-
-    def convert_mha_nii(self, mha_input_path, nii_out_path):  #nnUNet specific
-        img = SimpleITK.ReadImage(mha_input_path)
-        SimpleITK.WriteImage(img, nii_out_path, True)
-
-    def load_inputs(self):
-        pet_mha = glob.glob(os.path.join(self.input_path_pet)+"*.mha")[0]
-        self.convert_mha_nii(pet_mha, os.path.join(self.lion_work_dir_input, 'PT_input.nii.gz'))
-        ct_mha = glob.glob(os.path.join(self.input_path_ct)+"*.mha")[0]
-        self.convert_mha_nii(ct_mha, os.path.join(self.lion_work_dir_input, 'CT_input.nii.gz'))
-        
-    def set_output(self):
-        pet_mha = os.path.basename(glob.glob(os.path.join(self.input_path_pet)+"*.mha")[0])
-        print("pet_mha: ", pet_mha)
-        prediction_nii = glob.glob(os.path.join(self.lion_work_dir_output)+"*.nii.gz")[0]
-        print("prediction_nii: ", prediction_nii)
-        print("Setting output to file: ", os.path.join(self.output_path, pet_mha))
-        self.convert_mha_nii(prediction_nii, os.path.join(self.output_path, pet_mha))
+    def _setup_paths(self):
+        """Setup input and output paths."""
+        # These paths are inside the Docker container, not on the host machine
+        self.input_path = '/input/'
+        self.output_path = '/output/images/automated-petct-lesion-segmentation/'
+        self.trained_model_path_pet_ct = '/usr/local/models/nnunet_trained_models/Dataset789_Tumors_all_organs_LION/nnUNetTrainerDA5_2000epochs__nnUNetPlans__3d_fullres'
+        self.trained_model_path_pet = '/usr/local/models/nnunet_trained_models/Dataset804_Tumors_all_organs/nnUNetTrainerDA5__nnUNetPlans__3d_fullres'
 
     def predict(self):
-        with open(os.devnull, 'w') as devnull:
-            with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-                lion(TRACER_MODEL, self.lion_work_dir_input, self.lion_work_dir_output,ACCELERATOR)
+        """Perform image segmentation using trained models."""
+        print("nnUNet segmentation starting!")
+        os.environ['nnUNet_compile'] = 'F'
+        maybe_mkdir_p(self.output_path)
 
-    def clean_workdir(self):
-        for f in os.listdir(self.lion_work_dir_input):
-            remove(os.path.join(self.lion_work_dir_input, f))
-        for f in os.listdir(self.lion_work_dir_output):
-            remove(os.path.join(self.lion_work_dir_output, f))
+        ct_mha = subfiles(join(self.input_path, 'images/ct/'), suffix='.mha')[0]
+        pet_mha = subfiles(join(self.input_path, 'images/pet/'), suffix='.mha')[0]
+        uuid = os.path.basename(os.path.splitext(ct_mha)[0])
+        output_file_trunc = os.path.join(self.output_path, uuid)
+
+        predictor = self._initialize_predictor()
+        predictor.initialize_from_trained_model_folder(self.trained_model_path_pet_ct, use_folds='all', checkpoint_name='checkpoint_best.pth')
+        predictor.dataset_json['file_ending'] = '.mha'
+        images, properties = SimpleITKIO().read_images([ct_mha, pet_mha])
+        predictor.predict_single_npy_array(images, properties, None, output_file_trunc, False)
+        print('[1/2] Prediction finished')
+        seg_mha = file_utilities.get_files(self.output_path, 'mha')[0]
+        segmentation_mask = sitk.ReadImage(seg_mha)
+        tumor_mask = segmentation_mask == 11
+        sitk.WriteImage(tumor_mask, seg_mha)
+
+        if resources.has_label_above_threshold(seg_mha, 10):
+            print('Label is above the threshold. Proceeding with the second model.')
+            self._proceed_with_second_model(images, properties, output_file_trunc)
+        else:
+            print('Label is below threshold. Skipping the second model and exiting.')
+
+    def _proceed_with_second_model(self, images, properties, output_file_trunc):
+        os.remove(file_utilities.get_files(self.output_path, 'mha')[0])
+        predictor = self._initialize_predictor()
+        predictor.initialize_from_trained_model_folder(self.trained_model_path_pet, use_folds='all', checkpoint_name='checkpoint_best.pth')
+        predictor.dataset_json['file_ending'] = '.mha'
+        pet_mha = subfiles(join(self.input_path, 'images/pet/'), suffix='.mha')[0]
+        images, properties = SimpleITKIO().read_images([pet_mha])
+        predictor.predict_single_npy_array(images, properties, None, output_file_trunc, False)
+        seg_mha = file_utilities.get_files(self.output_path, 'mha')[0]
+        segmentation_mask = sitk.ReadImage(seg_mha)
+        tumor_mask = segmentation_mask == 11
+        sitk.WriteImage(tumor_mask, seg_mha)
+        resources.has_label_above_threshold(seg_mha, 10)
+        print('[2/2] Prediction finished')
+
+    def _initialize_predictor(self):
+        return nnUNetPredictor(
+            tile_step_size=0.5,
+            use_mirroring=True,
+            verbose=True,
+            verbose_preprocessing=True,
+            allow_tqdm=True
+        )
 
     def process(self):
-        self.check_gpu()
-        print('Copy inputs to lion workdir')
-        self.load_inputs()
         print('Start prediction')
         self.predict()
-        print('Prediction complete')
-        print('Copy outputs to grand-challenge output directory')
-        self.set_output()
-        print('Process complete')
-        self.clean_workdir()
+        print('done')
+
+
+def preamble_prayer():
+    print('')
+    print('')
+    print("----- 🌌 Preamble Prayer for the AutoPET Grand Challenge 🌌 -----")
+    print("In the realm of containers, Docker be its name 🐳,")
+    print("Submitting to AutoPET was never quite the same 🏆.")
+    print("From volumes to mounts, and `build` to `run` 🛠️,")
+    print("This challenge, it seemed, was never quite done 🔄.")
+    print()
+    print("The image would build, but then it'd fall short 📉,")
+    print("Debugging each error, making it a sport 🏁.")
+    print("With YAMLs and scripts, and ports galore 🚢,")
+    print("We wondered if we'd ever get a score 🤔.")
+    print()
+    print("Yet, in our darkest hours, when hope seemed but a myth 🌑,")
+    print("Came GPT-4 and Docker, a most powerful smith 🛠️.")
+    print("With clever advice, and code that's pristine ✨,")
+    print("This challenge was conquered, as if in a dream 🌙.")
+    print()
+    print("So here we go, once more into the fray 🌌,")
+    print("Hoping this time, AutoPET's dragons we'll slay 🐉.")
+    print("For the code, it is ready, the container's alight 🔥,")
+    print("To the Grand Challenge, we say: Good Night! 🌙")
+    print('')
+
 
 if __name__ == "__main__":
-    Lion().process()
-
-
-
-
+    preamble_prayer()
+    print("START")
+    LionAutopetSubmission().process()
