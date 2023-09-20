@@ -1,7 +1,7 @@
 # LION Algorithm autopet-ii grand-challenge
 
 The source code for the algorithm container for
-LION (MOOSE 2.0 tumour segmentation), generated with
+[LION](https://github.com/LalithShiyam/LION/tree/main/lionz), generated with
 evalutils version 0.4.2 using Python 3.10.
 
 ## Build Guide 🛠️
@@ -14,7 +14,8 @@ Run the [export.sh](https://github.com/zax0s/AutoPET2_LION/blob/main/export.sh) 
 
 ## Prediction :computer: 
 A wraper class was built to handle the data I/O in the container, within the [process.py](https://github.com/zax0s/AutoPET2_LION/blob/main/process.py).
-Moose prediction is handled within the wraper and then the output is set to the challenge required directory. 
+Modifications were made from the streamlined and optimized LION prediction pipeline, due to limited resources in the execution of the container by Grand Challenge.
+Prediction is handled within the wraper and then the output is set to the challenge required directory. 
 
 ## Testing :computer: 
 Testing is needed to make sure the Docker image is not using more than the allowed resources. 
